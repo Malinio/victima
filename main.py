@@ -1,13 +1,10 @@
+import datetime
 import socket
 import screeninfo
-import mss.tools as mss_tools
-import numpy as np
 
 from cv2 import cv2
 from mss import mss
-from zlib import compress, decompress
-from threading import Thread
-from PIL import Image
+from zlib import compress
 
 
 def send_screenshots(conn):
@@ -19,12 +16,12 @@ def send_screenshots(conn):
 
         while 'recording':
             img = sct.grab(rect)
-            pixels = compress(img.rgb)
+            pixels = compress(img.bgra)
 
             # pixels = decompress(pixels)
-            # # img = Image.frombytes('RGB', (1650, 1050), img)
-            # img = Image.frombytes("RGB", len(pixels), pixels, "raw", "BGRX")
-            # # img.save('kek.png')
+            # print(img.size)
+            # img = Image.frombytes('RGB', img.size, pixels, 'raw', 'BGRX')  # Convert to PIL.Image
+            # img.show()  # Show the image using the default image viewer
             # exit(0)
 
             size = len(pixels)
@@ -35,7 +32,7 @@ def send_screenshots(conn):
             conn.send(size_bytes)
 
             conn.send(pixels)
-            print('sent')
+            print(f'{datetime.datetime.now()} - sent')
 
 
 def main(host='192.168.0.139', port=9090):
