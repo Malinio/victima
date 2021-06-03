@@ -1,5 +1,7 @@
-import datetime
+import pickle
+import struct
 import time
+import pyautogui
 import socket
 import numpy as np
 import logging
@@ -47,35 +49,32 @@ def send_screenshots(conn):
 
     @check_time()
     def grab_screen():
-        return sct.grab(sct.monitors[1])
+        screen = pyautogui.screenshot()
+        frame_ = np.array(screen)
+        return frame_
 
     @check_time()
     def process_img():
-        img_arr = cv2.resize(np.array(img), (1200, 720))
-        img_low_res = Image.fromarray(img_arr, 'RGBA')
-        return compress(img_low_res.tobytes())
+        frame_ = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_ = cv2.resize(frame_, (1200, 720), interpolation=cv2.INTER_AREA)
+        return frame_
 
     @check_time()
     def send_img():
-        size = len(pixels)
-        size_len = (size.bit_length() + 7) // 8
-        conn.send(bytes([size_len]))
+        result, pixels_ = cv2.imencode('.jpg', pixels, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        data = pickle.dumps(pixels_, 0)
+        size = len(data)
+        conn.sendall(struct.pack('>L', size) + data)
 
-        size_bytes = size.to_bytes(size_len, 'big')
-        conn.send(size_bytes)
-
-        conn.send(pixels)
-
-    with mss() as sct:
-        while 'recording':
-            FRAME_NUM += 1
-            img = grab_screen()
-            pixels = process_img()
-            send_img()
+    while 'recording':
+        FRAME_NUM += 1
+        frame = grab_screen()
+        pixels = process_img()
+        send_img()
 
 
 def main(host='192.168.0.139', port=9090):
-    sock = socket.socket()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((host, port))
     try:
         send_screenshots(sock)
