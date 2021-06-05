@@ -4,9 +4,10 @@ import socket
 import numpy as np
 import logging
 
+from collections import deque
 from cv2 import cv2
 from mss import mss
-
+from threading import Thread
 
 logFormatter = logging.Formatter(
     '%(asctime)s.%(msecs)d %(message)s',
@@ -21,7 +22,7 @@ LOGGER.addHandler(fileHandler)
 
 consoleHandler = logging.StreamHandler()
 consoleHandler.setFormatter(logFormatter)
-LOGGER.addHandler(consoleHandler)
+# LOGGER.addHandler(consoleHandler)
 
 FRAME_NUM = 0
 
@@ -38,12 +39,21 @@ def check_time(func):
     return wrapper
 
 
-@check_time
-def grab_screen():
-    with mss() as sct:
-        frame = sct.grab(sct.monitors[1])
+def run_with_timeout(timeout=0):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            time.sleep(timeout)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
-    return frame
+
+# FRAME = cv2.imread('logs/universe.png')
+
+
+@check_time
+def grab_screen(sct):
+    return sct.grab(sct.monitors[1])
 
 
 @check_time
@@ -54,17 +64,35 @@ def process_frame(frame):
     return encoded_frame_arr.tobytes()
 
 
-@check_time
-def send_frame(conn, frame):
-    frame_size = len(frame)
-    conn.sendall(struct.pack('>Q', frame_size) + frame)
+def start_frames_grabbing(frame_queue):
+    sct = mss()
+    while True:
+        frame = grab_screen(sct)
+        # frame_bytes = process_frame(frame)
+        frame_queue.append(frame)
+
+
+@run_with_timeout(timeout=5)
+def send_frames(conn, frame_queue):
+    while True:
+        print(len(frame_queue))
+        frame = frame_queue.popleft()
+        frame_bytes = process_frame(frame)
+        frame_size = len(frame_bytes)
+        conn.send(struct.pack('>Q', frame_size) + frame_bytes)
 
 
 def share_screen(conn):
-    while True:
-        frame = grab_screen()
-        frame_bytes = process_frame(frame)
-        send_frame(conn, frame_bytes)
+    frame_queue = deque()
+
+    start_frames_grabbing_thread = Thread(target=start_frames_grabbing, args=(frame_queue,))
+    send_frames_thread = Thread(target=send_frames, args=(conn, frame_queue))
+
+    start_frames_grabbing_thread.start()
+    send_frames_thread.start()
+
+    start_frames_grabbing_thread.join()
+    send_frames_thread.join()
 
 
 def main(host='192.168.0.139', port=9090):
