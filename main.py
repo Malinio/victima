@@ -9,21 +9,6 @@ from cv2 import cv2
 from mss import mss
 from threading import Thread
 
-logFormatter = logging.Formatter(
-    '%(asctime)s.%(msecs)d %(message)s',
-    datefmt='%Y-%m-%dT%H:%M:%S',
-)
-LOGGER = logging.getLogger()
-LOGGER.setLevel(logging.INFO)
-
-fileHandler = logging.FileHandler('logs/screen_share_victima.log', mode='w')
-fileHandler.setFormatter(logFormatter)
-LOGGER.addHandler(fileHandler)
-
-consoleHandler = logging.StreamHandler()
-consoleHandler.setFormatter(logFormatter)
-# LOGGER.addHandler(consoleHandler)
-
 FRAME_NUM = 0
 
 
@@ -33,9 +18,10 @@ def check_time(func):
         return_value = func(*args, **kwargs)
         end = time.time()
 
-        LOGGER.info(f'victima:{func.__name__}:{(end - start) * 100:.2f}ms:{FRAME_NUM}')
+        LOGGER.info(f'victima:{func.__name__}:{(end - start) * 1000:.2f}ms')
 
         return return_value
+
     return wrapper
 
 
@@ -44,7 +30,9 @@ def run_with_timeout(timeout=0):
         def wrapper(*args, **kwargs):
             time.sleep(timeout)
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -95,9 +83,30 @@ def share_screen(conn):
     send_frames_thread.join()
 
 
-def main(host='192.168.0.139', port=9090):
+def get_logger():
+    log_formatter = logging.Formatter('%(asctime)s.%(msecs)d %(message)s',
+                                      datefmt='%Y-%m-%dT%H:%M:%S')
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler('logs/screen_share_victima.log', mode='w')
+    file_handler.setFormatter(log_formatter)
+    logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_formatter)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
+def main(host='192.168.43.100', port=9090):
     sock = socket.socket()
     sock.connect((host, port))
+
+    global LOGGER
+    LOGGER = get_logger()
+
     try:
         share_screen(sock)
     finally:
